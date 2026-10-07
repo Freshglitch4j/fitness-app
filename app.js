@@ -6,7 +6,7 @@
   'use strict';
 
   var C = window.FitCore;
-  var APP_VERSION = '2';
+  var APP_VERSION = '3';
   var KEY = 'fitness.v1';
   var KEY_UNDO = 'fitness.undoImport';
 

@@ -4,7 +4,10 @@ Ein schlichtes Trainingstagebuch als installierbare Web-App (PWA) – gebaut nac
 dem Vorbild der Papierkarte: Übung, Gewicht, Satz 1 / 2 / 3. Alle Daten bleiben
 auf deinem Handy. Kein Konto, kein Server, keine Werbung, offline nutzbar.
 
-**Adresse der App:** <https://freshglitch4j.github.io/fitness/>
+**Adresse der App:** <https://freshglitch4j.github.io/fitness-app/>
+
+(Früher lag die App unter `…/fitness/`. Dort bleibt nichts mehr erreichbar; die Daten
+sind trotzdem da, weil sie an `freshglitch4j.github.io` hängen, nicht am Ordner.)
 
 ---
 
@@ -12,12 +15,12 @@ auf deinem Handy. Kein Konto, kein Server, keine Werbung, offline nutzbar.
 
 ### GitHub Pages einschalten (einmalig, am Computer oder Handy)
 
-1. Auf GitHub das Repository **fitness** öffnen.
+1. Auf GitHub das Repository **fitness-app** öffnen.
 2. **Settings** → links **Pages**.
 3. Bei „Build and deployment“ → „Source“: **Deploy from a branch**.
 4. Bei „Branch“: **main** und **/ (root)** wählen → **Save**.
 5. Ein bis zwei Minuten warten. Danach ist die App unter
-   `https://freshglitch4j.github.io/fitness/` erreichbar.
+   `https://freshglitch4j.github.io/fitness-app/` erreichbar.
 
 ### Auf den Startbildschirm des Galaxy A55
 
