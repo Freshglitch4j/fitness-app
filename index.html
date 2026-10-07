@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fitness</title>
+<meta name="description" content="Einfaches Trainingstagebuch. Alle Daten bleiben auf diesem Gerät.">
+<meta name="theme-color" content="#10181b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fitness">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<main class="app">
+
+  <!-- ========================================================= TRAINING -->
+  <section id="view-train" class="view is-active" aria-label="Training erfassen">
+    <div class="topbar">
+      <div class="tb-title">
+        <div class="kicker" id="trKicker">Heute</div>
+        <h1>Training <span class="nr" id="trNum">1</span></h1>
+        <div class="sub" id="trSub">–</div>
+      </div>
+      <div class="tb-actions">
+        <button class="iconbtn iconbtn-text" id="trToday" hidden>heute</button>
+        <span class="datewrap">
+          <button class="iconbtn" id="trPick" aria-label="Datum wählen">
+            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+              <path d="M3 10h18M8 3v4M16 3v4"></path>
+            </svg>
+          </button>
+          <input type="date" id="trDate" class="datepicker" tabindex="-1" aria-hidden="true">
+        </span>
+      </div>
+    </div>
+
+    <button class="bwrow" id="bwBtn">
+      <span class="bw-k">Körpergewicht</span>
+      <span class="bw-v" id="bwVal">–</span>
+    </button>
+
+    <div id="exList"></div>
+
+    <div class="train-foot">
+      <button class="btn btn-quiet" id="trDelete" hidden>Dieses Training löschen</button>
+    </div>
+  </section>
+
+  <!-- ========================================================= ANALYSE -->
+  <section id="view-stats" class="view" aria-label="Analyse">
+    <div class="topbar">
+      <div class="tb-title"><h1>Analyse</h1></div>
+    </div>
+    <div class="chipscroll" id="statChips" role="tablist" aria-label="Übung wählen"></div>
+    <div id="statBody"></div>
+  </section>
+
+  <!-- ========================================================= EINSTELLUNGEN -->
+  <section id="view-more" class="view" aria-label="Einstellungen">
+    <div class="topbar">
+      <div class="tb-title"><h1>Einstellungen</h1></div>
+    </div>
+
+    <div class="card">
+      <h2>Übungen</h2>
+      <div id="exManage"></div>
+      <button class="btn" id="exAdd">+ Übung hinzufügen</button>
+    </div>
+
+    <div class="card">
+      <h2>Pausentimer</h2>
+      <p class="hint">Startet nach jedem eingetragenen Satz und vibriert am Ende.</p>
+      <div class="segmented" id="restSeg">
+        <button data-v="0">Aus</button>
+        <button data-v="60">60 s</button>
+        <button data-v="90">90 s</button>
+        <button data-v="120">2 min</button>
+        <button data-v="180">3 min</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Darstellung</h2>
+      <div class="segmented" id="themeSeg">
+        <button data-v="dark">Dunkel</button>
+        <button data-v="light">Hell</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Daten</h2>
+      <p class="hint" id="backupInfo">–</p>
+      <button class="btn btn-primary" id="doBackup">Backup speichern (JSON)</button>
+      <button class="btn" id="doImport">Backup einspielen</button>
+      <button class="btn" id="doCsv">Export für Excel (CSV)</button>
+      <button class="btn btn-quiet" id="undoImport" hidden>Letzten Import rückgängig machen</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <p class="note-small" id="storageInfo"></p>
+    </div>
+
+    <p class="note-small center">Fitness · Version <span id="appVersion"></span> · alle Daten bleiben auf diesem Gerät</p>
+  </section>
+
+</main>
+
+<!-- Pausentimer -->
+<div class="timer" id="timer" hidden>
+  <button class="timer-main" id="timerMain" aria-label="Pausentimer beenden">
+    <span class="timer-k" id="timerK">Pause</span>
+    <span class="timer-v" id="timerV">1:30</span>
+  </button>
+  <button class="timer-btn" id="timerPlus">+30 s</button>
+  <button class="timer-btn" id="timerStop" aria-label="Timer stoppen">✕</button>
+</div>
+
+<!-- Zahlenfeld -->
+<div class="sheet-backdrop" id="padBackdrop" hidden></div>
+<div class="sheet" id="pad" role="dialog" aria-modal="true" aria-labelledby="padTitle" hidden>
+  <div class="pad-head">
+    <div class="pad-titles">
+      <div class="pad-title" id="padTitle">–</div>
+      <div class="pad-sub" id="padSub">–</div>
+    </div>
+    <button class="iconbtn" id="padClose" aria-label="Schließen">✕</button>
+  </div>
+  <div class="pad-display">
+    <button class="padstep" id="padMinus" aria-label="weniger">−</button>
+    <div class="pad-val"><span class="pad-num" id="padVal">0</span><span class="pad-unit" id="padUnit">WH</span></div>
+    <button class="padstep" id="padPlus" aria-label="mehr">+</button>
+  </div>
+  <div class="pad-keys" id="padKeys">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k=",">,</button><button data-k="0">0</button><button data-k="del" aria-label="Löschen">⌫</button>
+  </div>
+  <div class="pad-actions">
+    <button class="btn" id="padClear">Leeren</button>
+    <button class="btn" id="padCheck">✓ ohne Zahl</button>
+    <button class="btn btn-primary" id="padOk">OK</button>
+  </div>
+</div>
+
+<dialog id="dlg"></dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<nav class="nav" aria-label="Hauptnavigation">
+  <button data-view="train" aria-current="page">
+    <span class="ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+        <path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"></path>
+      </svg>
+    </span>Training</button>
+  <button data-view="stats">
+    <span class="ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path>
+      </svg>
+    </span>Analyse</button>
+  <button data-view="more">
+    <span class="ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path>
+      </svg>
+      <span class="badge" id="moreBadge" hidden></span>
+    </span>Einstellungen</button>
+</nav>
+
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

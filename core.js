@@ -1,0 +1,407 @@
+/* =========================================================================
+   Fitness – Kernlogik
+   Reine Funktionen ohne Bildschirm-Bezug: Datum, Zahlen, Trainings,
+   Auswertung, Export/Import. Läuft im Browser und in Node (für Tests).
+   ========================================================================= */
+(function (root) {
+  'use strict';
+
+  var WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  var MAX_SETS = 6;
+
+  // Startliste nach der Papierkarte. type: 'weight' = mit Zusatzgewicht,
+  // 'body' = Körpergewicht (Gewicht kann trotzdem eingetragen werden).
+  var DEFAULT_EXERCISES = [
+    ['latzug', 'Latzug', 'weight'],
+    ['rudern', 'Rudern', 'weight'],
+    ['bizeps', 'Bizepscurls KH', 'weight'],
+    ['schulter', 'Schulterdrücken', 'weight'],
+    ['seitheben', 'Seitheben KH', 'weight'],
+    ['trizeps', 'Trizeps gr. M.', 'weight'],
+    ['ruecken', 'Unterer Rücken', 'body'],
+    ['bauch-seitl', 'Bauch seitlich', 'body'],
+    ['nacken', 'Nacken', 'body'],
+    ['bauch', 'Bauch', 'body']
+  ];
+
+  // ------------------------------------------------------------ Datum
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function dateKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function parseKey(key) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key || '');
+    if (!m) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (d.getMonth() !== +m[2] - 1) return null;
+    return d;
+  }
+
+  function isValidKey(key) { return parseKey(key) !== null; }
+
+  function todayKey() { return dateKey(new Date()); }
+
+  function addMonths(key, n) {
+    var d = parseKey(key);
+    d.setMonth(d.getMonth() + n);
+    return dateKey(d);
+  }
+
+  function formatDate(key, style) {
+    var d = parseKey(key);
+    if (!d) return '';
+    var dm = pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.';
+    if (style === 'dm') return dm;
+    if (style === 'short') return WD[d.getDay()] + ' ' + dm + String(d.getFullYear()).slice(2);
+    return WD[d.getDay()] + ', ' + dm + d.getFullYear();
+  }
+
+  function formatTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  // ------------------------------------------------------------ Zahlen
+
+  // Deutsches Format: Komma als Dezimaltrennzeichen, keine unnötigen Nullen.
+  function fmtNum(n) {
+    if (n === null || n === undefined || n === '' || isNaN(n)) return '';
+    var r = Math.round(n * 100) / 100;
+    return String(r).replace('.', ',');
+  }
+
+  function parseNum(str) {
+    if (typeof str === 'number') return isFinite(str) ? str : null;
+    if (typeof str !== 'string') return null;
+    var s = str.trim().replace(',', '.');
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
+    return parseFloat(s);
+  }
+
+  function roundTo(n, step) { return Math.round(n / step) * step; }
+
+  // ------------------------------------------------------------ Zustand
+
+  function uid(prefix) {
+    return (prefix || 'id') + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function defaultSettings() {
+    return { theme: 'dark', restSec: 90, lastBackup: null };
+  }
+
+  function defaultState() {
+    return {
+      version: 1,
+      exercises: DEFAULT_EXERCISES.map(function (e) {
+        return { id: e[0], name: e[1], type: e[2], sets: 3, hidden: false };
+      }),
+      trainings: [],
+      settings: defaultSettings()
+    };
+  }
+
+  function isSetValue(v) { return v === null || v === true || (typeof v === 'number' && isFinite(v) && v >= 0); }
+
+  function cleanNum(v, max) {
+    var n = parseNum(v);
+    if (n === null || n < 0 || n > max) return null;
+    return Math.round(n * 100) / 100;
+  }
+
+  // Prüft und bereinigt einen geladenen oder importierten Zustand.
+  // Unbekanntes wird verworfen, kaputte Einträge übersprungen.
+  function sanitizeState(raw) {
+    if (!raw || typeof raw !== 'object') throw new Error('Keine gültigen Daten.');
+    var out = defaultState();
+    if (Array.isArray(raw.exercises)) {
+      var seen = {};
+      out.exercises = [];
+      raw.exercises.forEach(function (e) {
+        if (!e || typeof e.id !== 'string' || !e.id || seen[e.id]) return;
+        var name = typeof e.name === 'string' ? e.name.trim().slice(0, 40) : '';
+        if (!name) return;
+        seen[e.id] = true;
+        var sets = parseInt(e.sets, 10);
+        out.exercises.push({
+          id: e.id.slice(0, 60),
+          name: name,
+          type: e.type === 'body' ? 'body' : 'weight',
+          sets: sets >= 1 && sets <= MAX_SETS ? sets : 3,
+          hidden: !!e.hidden
+        });
+      });
+    }
+    var exIds = {};
+    out.exercises.forEach(function (e) { exIds[e.id] = true; });
+
+    if (Array.isArray(raw.trainings)) {
+      var byDate = {};
+      raw.trainings.forEach(function (t) {
+        if (!t || !isValidKey(t.date) || byDate[t.date]) return;
+        var entries = {};
+        if (t.entries && typeof t.entries === 'object') {
+          Object.keys(t.entries).forEach(function (exId) {
+            if (!exIds[exId]) return;
+            var en = t.entries[exId] || {};
+            var sets = Array.isArray(en.sets) ? en.sets.slice(0, MAX_SETS).map(function (v) {
+              if (v === true) return true;
+              return cleanNum(v, 999);
+            }) : [];
+            var entry = {
+              weight: cleanNum(en.weight, 999),
+              sets: sets,
+              note: typeof en.note === 'string' ? en.note.slice(0, 500) : ''
+            };
+            if (hasData(entry)) entries[exId] = entry;
+          });
+        }
+        var tr = {
+          id: typeof t.id === 'string' && t.id ? t.id : uid('t'),
+          date: t.date,
+          createdAt: typeof t.createdAt === 'string' && !isNaN(new Date(t.createdAt)) ? t.createdAt : null,
+          bodyweight: cleanNum(t.bodyweight, 400),
+          entries: entries
+        };
+        if (!trainingIsEmpty(tr)) { byDate[t.date] = true; out.trainings.push(tr); }
+      });
+    }
+    sortTrainings(out.trainings);
+
+    if (raw.settings && typeof raw.settings === 'object') {
+      var s = raw.settings;
+      if (s.theme === 'light' || s.theme === 'dark') out.settings.theme = s.theme;
+      var rest = parseInt(s.restSec, 10);
+      if ([0, 60, 90, 120, 180].indexOf(rest) >= 0) out.settings.restSec = rest;
+      if (typeof s.lastBackup === 'string') out.settings.lastBackup = s.lastBackup;
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------ Trainings
+
+  function sortTrainings(list) {
+    list.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    return list;
+  }
+
+  function hasData(entry) {
+    if (!entry) return false;
+    return entry.weight !== null && entry.weight !== undefined ||
+      (entry.sets || []).some(function (v) { return v !== null && v !== undefined; }) ||
+      !!(entry.note && entry.note.trim());
+  }
+
+  function entryDone(entry) {
+    return !!entry && (entry.sets || []).some(function (v) { return v !== null && v !== undefined; });
+  }
+
+  function trainingIsEmpty(t) {
+    return !t || (t.bodyweight === null || t.bodyweight === undefined) &&
+      !Object.keys(t.entries || {}).some(function (k) { return hasData(t.entries[k]); });
+  }
+
+  function getTraining(state, date) {
+    for (var i = 0; i < state.trainings.length; i++) {
+      if (state.trainings[i].date === date) return state.trainings[i];
+    }
+    return null;
+  }
+
+  function ensureTraining(state, date, nowIso) {
+    var t = getTraining(state, date);
+    if (t) return t;
+    t = { id: uid('t'), date: date, createdAt: nowIso || new Date().toISOString(), bodyweight: null, entries: {} };
+    state.trainings.push(t);
+    sortTrainings(state.trainings);
+    return t;
+  }
+
+  function ensureEntry(training, exId) {
+    if (!training.entries[exId]) training.entries[exId] = { weight: null, sets: [], note: '' };
+    return training.entries[exId];
+  }
+
+  // Entfernt leere Einträge und – falls nichts übrig bleibt – das Training.
+  function tidyTraining(state, date) {
+    var t = getTraining(state, date);
+    if (!t) return;
+    Object.keys(t.entries).forEach(function (k) {
+      var e = t.entries[k];
+      while (e.sets.length && (e.sets[e.sets.length - 1] === null || e.sets[e.sets.length - 1] === undefined)) e.sets.pop();
+      if (!hasData(e)) delete t.entries[k];
+    });
+    if (trainingIsEmpty(t)) state.trainings.splice(state.trainings.indexOf(t), 1);
+  }
+
+  // Laufende Nummer: Trainings werden nach Datum durchgezählt, beginnend bei 1.
+  // Für einen Tag ohne Training gilt die Nummer, die er bekäme.
+  function trainingNumber(state, date) {
+    var n = 1;
+    state.trainings.forEach(function (t) { if (t.date < date) n++; });
+    return n;
+  }
+
+  function findExercise(state, id) {
+    for (var i = 0; i < state.exercises.length; i++) if (state.exercises[i].id === id) return state.exercises[i];
+    return null;
+  }
+
+  // Letzter Eintrag einer Übung vor einem Datum (für Vorbelegung und "zuletzt").
+  function lastEntryBefore(state, exId, date) {
+    for (var i = state.trainings.length - 1; i >= 0; i--) {
+      var t = state.trainings[i];
+      if (t.date >= date) continue;
+      var e = t.entries[exId];
+      if (e && (entryDone(e) || e.weight !== null)) return { training: t, entry: e };
+    }
+    return null;
+  }
+
+  function lastBodyweightBefore(state, date) {
+    for (var i = state.trainings.length - 1; i >= 0; i--) {
+      var t = state.trainings[i];
+      if (t.date < date && t.bodyweight !== null && t.bodyweight !== undefined) return t.bodyweight;
+    }
+    return null;
+  }
+
+  function setCount(ex, entry) {
+    var n = ex ? ex.sets : 3;
+    if (entry && entry.sets.length > n) n = entry.sets.length;
+    return Math.min(n, MAX_SETS);
+  }
+
+  function setLabel(v) {
+    if (v === true) return '✓';
+    if (v === null || v === undefined) return '';
+    return fmtNum(v);
+  }
+
+  function entrySummary(entry) {
+    var parts = [];
+    if (entry.weight !== null && entry.weight !== undefined) parts.push(fmtNum(entry.weight) + ' kg');
+    var sets = entry.sets.filter(function (v) { return v !== null && v !== undefined; }).map(setLabel);
+    if (sets.length) parts.push(sets.join(' · '));
+    return parts.join('  ·  ');
+  }
+
+  // ------------------------------------------------------------ Auswertung
+
+  function rangeStart(range, today) {
+    if (range === '3m') return addMonths(today, -3);
+    if (range === '6m') return addMonths(today, -6);
+    if (range === '1y') return addMonths(today, -12);
+    return '0000-00-00';
+  }
+
+  // Ein Punkt je Training: Datum, Nummer, Gewicht, Wiederholungen je Satz.
+  function exerciseSeries(state, exId, fromKey) {
+    var rows = [];
+    var maxSets = 0;
+    state.trainings.forEach(function (t, i) {
+      if (t.date < fromKey) return;
+      var e = t.entries[exId];
+      if (!e || !hasData(e)) return;
+      var ys = e.sets.map(function (v) { return typeof v === 'number' ? v : null; });
+      ys.forEach(function (v, k) { if (v !== null && k + 1 > maxSets) maxSets = k + 1; });
+      rows.push({ date: t.date, nr: i + 1, weight: e.weight, sets: e.sets.slice(), ys: ys, note: e.note });
+    });
+    return { rows: rows, maxSets: maxSets };
+  }
+
+  function bodySeries(state, fromKey) {
+    var rows = [];
+    state.trainings.forEach(function (t, i) {
+      if (t.date < fromKey || t.bodyweight === null || t.bodyweight === undefined) return;
+      rows.push({ date: t.date, nr: i + 1, ys: [t.bodyweight] });
+    });
+    return { rows: rows, maxSets: rows.length ? 1 : 0 };
+  }
+
+  // ------------------------------------------------------------ Export / Import
+
+  function buildExport(state) {
+    return {
+      app: 'fitness',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      exercises: state.exercises,
+      trainings: state.trainings,
+      settings: state.settings
+    };
+  }
+
+  function parseImport(text) {
+    var raw;
+    try { raw = JSON.parse(text); } catch (e) { throw new Error('Die Datei ist keine gültige Sicherung (kein JSON).'); }
+    if (!raw || raw.app !== 'fitness') throw new Error('Die Datei ist keine Sicherung dieser App.');
+    return sanitizeState(raw);
+  }
+
+  // CSV für Excel: Semikolon als Trenner, Komma als Dezimalzeichen, UTF-8 mit BOM.
+  function toCsv(state) {
+    var maxSets = 3;
+    state.trainings.forEach(function (t) {
+      Object.keys(t.entries).forEach(function (k) {
+        if (t.entries[k].sets.length > maxSets) maxSets = t.entries[k].sets.length;
+      });
+    });
+    function q(s) {
+      s = String(s === null || s === undefined ? '' : s);
+      return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    var head = ['Training', 'Datum', 'Beginn', 'Übung', 'Gewicht (kg)'];
+    for (var i = 1; i <= maxSets; i++) head.push('Satz ' + i);
+    head.push('Notiz', 'Körpergewicht (kg)');
+    var lines = [head.map(q).join(';')];
+    state.trainings.forEach(function (t, idx) {
+      var d = parseKey(t.date);
+      var datum = pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+      var beginn = t.createdAt && dateKey(new Date(t.createdAt)) === t.date ? formatTime(t.createdAt) : '';
+      var order = state.exercises.map(function (e) { return e.id; });
+      var keys = Object.keys(t.entries).sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+      if (!keys.length) keys = [null];
+      keys.forEach(function (k) {
+        var ex = k ? findExercise(state, k) : null;
+        var e = k ? t.entries[k] : { weight: null, sets: [], note: '' };
+        var row = [idx + 1, datum, beginn, ex ? ex.name : '', fmtNum(e.weight)];
+        for (var s = 0; s < maxSets; s++) row.push(e.sets[s] === true ? 'x' : fmtNum(e.sets[s]));
+        row.push(e.note || '', fmtNum(t.bodyweight));
+        lines.push(row.map(q).join(';'));
+      });
+    });
+    return '﻿' + lines.join('\r\n') + '\r\n';
+  }
+
+  function makeExerciseId(name, state) {
+    var base = name.toLowerCase()
+      .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'uebung';
+    var id = base, n = 2;
+    while (findExercise(state, id)) id = base + '-' + n++;
+    return id;
+  }
+
+  var api = {
+    WD: WD, MAX_SETS: MAX_SETS,
+    pad2: pad2, dateKey: dateKey, parseKey: parseKey, isValidKey: isValidKey, todayKey: todayKey,
+    addMonths: addMonths, formatDate: formatDate, formatTime: formatTime,
+    fmtNum: fmtNum, parseNum: parseNum, roundTo: roundTo,
+    uid: uid, defaultState: defaultState, sanitizeState: sanitizeState,
+    hasData: hasData, entryDone: entryDone, trainingIsEmpty: trainingIsEmpty,
+    getTraining: getTraining, ensureTraining: ensureTraining, ensureEntry: ensureEntry, tidyTraining: tidyTraining,
+    trainingNumber: trainingNumber, findExercise: findExercise,
+    lastEntryBefore: lastEntryBefore, lastBodyweightBefore: lastBodyweightBefore,
+    setCount: setCount, setLabel: setLabel, entrySummary: entrySummary,
+    rangeStart: rangeStart, exerciseSeries: exerciseSeries, bodySeries: bodySeries,
+    buildExport: buildExport, parseImport: parseImport, toCsv: toCsv, makeExerciseId: makeExerciseId
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.FitCore = api;
+})(this);
