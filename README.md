@@ -63,6 +63,25 @@ Unten gibt es drei Bereiche: **Training**, **Analyse** und **Einstellungen**.
 - **Körpergewicht** ganz oben ist freiwillig.
 - Erledigte Übungen bekommen links einen Petrol-Streifen und ein ✓.
 
+### Gym-Ziel
+
+Oben im Training zeigt eine Karte den Fortschritt zum Ziel – voreingestellt
+**75 Besuche vom 07.10.2026 bis 31.03.2027**:
+
+- **22 / 75** – so oft warst du schon im Gym. Jeder Tag mit mindestens einem
+  Eintrag zählt als ein Besuch.
+- Der Balken zeigt den Fortschritt, der senkrechte Strich das **Soll** bis heute
+  (gleichmäßig über den Zeitraum verteilt, ≈ 3× pro Woche).
+- **↑ 3 vor dem Plan / ✓ Genau im Plan / ↓ 2 hinter dem Plan** – verglichen
+  wird mit dem Soll bis gestern, damit man morgens nicht schon „hinten“ liegt.
+- Darunter: wie viele Besuche noch fehlen, wie oft du ab jetzt pro Woche gehen
+  musst, und wie oft du diese Woche schon da warst.
+- Beim ersten Eintrag eines Tages meldet die App „💪 Besuch 12 von 75“.
+- Antippen öffnet die Analyse mit einem Diagramm: deine Besuche (Ist) gegen die
+  Soll-Linie bis zum Zieldatum.
+
+Ziel, Zeitraum oder Ausblenden: *Einstellungen → Gym-Ziel → Ziel ändern*.
+
 ### Pausentimer
 
 Nach jedem eingetragenen Satz startet unten ein Countdown (Standard 90 s). Am

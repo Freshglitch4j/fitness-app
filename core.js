@@ -50,6 +50,19 @@
     return dateKey(d);
   }
 
+  // Ganze Tage von a bis b (b - a), unabhängig von Sommer-/Winterzeit
+  function daysBetween(a, b) {
+    var da = parseKey(a), db = parseKey(b);
+    return Math.round((Date.UTC(db.getFullYear(), db.getMonth(), db.getDate()) -
+      Date.UTC(da.getFullYear(), da.getMonth(), da.getDate())) / 864e5);
+  }
+
+  function addDays(key, n) {
+    var d = parseKey(key);
+    d.setDate(d.getDate() + n);
+    return dateKey(d);
+  }
+
   function formatDate(key, style) {
     var d = parseKey(key);
     if (!d) return '';
@@ -91,7 +104,11 @@
   }
 
   function defaultSettings() {
-    return { theme: 'dark', restSec: 90, lastBackup: null };
+    return {
+      theme: 'dark', restSec: 90, lastBackup: null,
+      // Gym-Ziel: Anzahl Besuche (= Trainingstage) im Zeitraum
+      goal: { on: true, target: 75, start: '2026-10-07', end: '2027-03-31' }
+    };
   }
 
   function defaultState() {
@@ -178,6 +195,12 @@
       var rest = parseInt(s.restSec, 10);
       if ([0, 60, 90, 120, 180].indexOf(rest) >= 0) out.settings.restSec = rest;
       if (typeof s.lastBackup === 'string') out.settings.lastBackup = s.lastBackup;
+      if (s.goal && typeof s.goal === 'object') {
+        var g = s.goal, tg = parseInt(g.target, 10);
+        if (tg >= 1 && tg <= 1000 && isValidKey(g.start) && isValidKey(g.end) && g.end > g.start) {
+          out.settings.goal = { on: g.on !== false, target: tg, start: g.start, end: g.end };
+        } else if (g.on === false) out.settings.goal.on = false;
+      }
     }
     return out;
   }
@@ -323,6 +346,46 @@
     return { rows: rows, maxSets: rows.length ? 1 : 0 };
   }
 
+  // ------------------------------------------------------------ Gym-Ziel
+
+  // Fortschritt zum Ziel „X Besuche von Start bis Ende“. Jeder Tag mit einem
+  // Training zählt als Besuch. Das Soll wächst gleichmäßig über den Zeitraum;
+  // verglichen wird mit dem Soll bis einschließlich gestern, damit man morgens
+  // nicht schon „hinten“ liegt, bevor man überhaupt trainieren konnte.
+  function goalStatus(state, today) {
+    var g = state.settings.goal;
+    if (!g || !g.on) return null;
+    var total = daysBetween(g.start, g.end) + 1;
+    var dates = state.trainings.map(function (t) { return t.date; })
+      .filter(function (d) { return d >= g.start && d <= g.end && d <= today; });
+    var count = dates.length;
+    var trainedToday = dates.indexOf(today) >= 0;
+    var phase = today < g.start ? 'before' : today > g.end ? 'after' : 'running';
+
+    var daysBefore = Math.min(Math.max(daysBetween(g.start, today), 0), total);
+    var expected = g.target * daysBefore / total;
+    var diff = count - expected;
+    var status = diff >= 0.5 ? 'ahead' : diff > -0.5 ? 'ontrack' : 'behind';
+
+    var remaining = Math.max(g.target - count, 0);
+    var firstOpen = trainedToday ? addDays(today, 1) : today;
+    if (firstOpen < g.start) firstOpen = g.start;
+    var daysLeft = Math.max(daysBetween(firstOpen, g.end) + 1, 0);
+    var perWeek = remaining && daysLeft ? remaining / (daysLeft / 7) : 0;
+
+    // Montag der laufenden Woche
+    var wd = (parseKey(today).getDay() + 6) % 7;
+    var monday = addDays(today, -wd);
+    var weekCount = dates.filter(function (d) { return d >= monday; }).length;
+
+    return {
+      target: g.target, start: g.start, end: g.end, total: total, phase: phase,
+      count: count, expected: expected, diff: diff, status: status,
+      ahead: Math.round(Math.abs(diff)), remaining: remaining, daysLeft: daysLeft,
+      perWeek: perWeek, weekCount: weekCount, reached: count >= g.target, dates: dates
+    };
+  }
+
   // ------------------------------------------------------------ Export / Import
 
   function buildExport(state) {
@@ -390,7 +453,7 @@
   var api = {
     WD: WD, MAX_SETS: MAX_SETS,
     pad2: pad2, dateKey: dateKey, parseKey: parseKey, isValidKey: isValidKey, todayKey: todayKey,
-    addMonths: addMonths, formatDate: formatDate, formatTime: formatTime,
+    addMonths: addMonths, addDays: addDays, daysBetween: daysBetween, formatDate: formatDate, formatTime: formatTime,
     fmtNum: fmtNum, parseNum: parseNum, roundTo: roundTo,
     uid: uid, defaultState: defaultState, sanitizeState: sanitizeState,
     hasData: hasData, entryDone: entryDone, trainingIsEmpty: trainingIsEmpty,
@@ -398,7 +461,7 @@
     trainingNumber: trainingNumber, findExercise: findExercise,
     lastEntryBefore: lastEntryBefore, lastBodyweightBefore: lastBodyweightBefore,
     setCount: setCount, setLabel: setLabel, entrySummary: entrySummary,
-    rangeStart: rangeStart, exerciseSeries: exerciseSeries, bodySeries: bodySeries,
+    rangeStart: rangeStart, goalStatus: goalStatus, exerciseSeries: exerciseSeries, bodySeries: bodySeries,
     buildExport: buildExport, parseImport: parseImport, toCsv: toCsv, makeExerciseId: makeExerciseId
   };
 

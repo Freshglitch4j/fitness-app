@@ -6,7 +6,7 @@
   'use strict';
 
   var C = window.FitCore;
-  var APP_VERSION = '4';
+  var APP_VERSION = '5';
   var KEY = 'fitness.v1';
   var KEY_UNDO = 'fitness.undoImport';
 
@@ -171,6 +171,8 @@
     $('trDate').value = curDate;
     $('trDelete').hidden = !t;
 
+    renderGoalBox();
+
     var bw = t ? t.bodyweight : null;
     var bwEl = $('bwVal');
     bwEl.textContent = bw !== null ? C.fmtNum(bw) + ' kg' : 'eintragen';
@@ -188,6 +190,52 @@
     }
     exs.forEach(function (ex) { list.appendChild(exerciseCard(ex, t)); });
   }
+
+  // ---------------------------------------------------------------- Gym-Ziel
+
+  function goalTexts(g) {
+    var endDm = C.formatDate(g.end, 'dm');
+    if (g.reached) return { status: '🎉 Ziel erreicht!', cls: 'is-reached', meta: g.count + ' Besuche – stark!' };
+    if (g.phase === 'before') return { status: 'Startet am ' + C.formatDate(g.start, 'dm'), cls: 'is-ontrack', meta: g.target + ' Besuche bis ' + endDm };
+    if (g.phase === 'after') return { status: 'Zeitraum vorbei', cls: 'is-behind', meta: g.count + ' von ' + g.target + ' Besuchen geschafft' };
+    var status = g.status === 'ahead' ? '↑ ' + g.ahead + ' vor dem Plan'
+      : g.status === 'behind' ? '↓ ' + g.ahead + ' hinter dem Plan'
+      : '✓ Genau im Plan';
+    var pw = Math.round(g.perWeek * 10) / 10;
+    return {
+      status: status, cls: 'is-' + g.status,
+      meta: 'Noch ' + g.remaining + ' bis ' + endDm + ' · ≈ ' + C.fmtNum(pw) + '× pro Woche nötig',
+      week: 'Diese Woche: ' + g.weekCount + '×'
+    };
+  }
+
+  function goalBar(g) {
+    return h('div', { class: 'goal-bar', 'aria-hidden': 'true' }, [
+      h('div', { class: 'goal-fill', style: 'width:' + Math.min(100, g.count / g.target * 100).toFixed(1) + '%' }),
+      g.phase === 'running' && !g.reached
+        ? h('div', { class: 'goal-soll', style: 'left:' + Math.min(100, g.expected / g.target * 100).toFixed(1) + '%' }) : null
+    ]);
+  }
+
+  function renderGoalBox() {
+    var box = $('goalBox');
+    var g = C.goalStatus(state, C.todayKey());
+    box.hidden = !g;
+    if (!g) return;
+    var tx = goalTexts(g);
+    box.textContent = '';
+    box.setAttribute('aria-label', 'Gym-Ziel: ' + g.count + ' von ' + g.target + '. ' + tx.status);
+    box.appendChild(h('div', { class: 'goal-top' }, [
+      h('span', { class: 'goal-k', text: 'Gym-Ziel bis ' + C.formatDate(g.end, 'dm') }),
+      h('span', { class: 'goal-n' }, [h('b', { text: String(g.count) }), ' / ' + g.target])
+    ]));
+    box.appendChild(goalBar(g));
+    box.appendChild(h('div', { class: 'goal-status ' + tx.cls, text: tx.status }));
+    box.appendChild(h('div', { class: 'goal-meta', text: tx.meta }));
+    if (tx.week) box.appendChild(h('div', { class: 'goal-meta', text: tx.week }));
+  }
+
+  $('goalBox').addEventListener('click', function () { statSel = ALL; showView('stats'); });
 
   function exerciseCard(ex, t) {
     var entry = t ? t.entries[ex.id] : null;
@@ -417,6 +465,7 @@
     var today = C.todayKey();
     var nowIso = curDate === today ? new Date().toISOString() : null;
     var t = C.getTraining(state, curDate);
+    var isNewDay = !t && value !== null && curDate === today;
     if (value !== null) t = C.ensureTraining(state, curDate, nowIso);
     var startTimer = false;
 
@@ -447,6 +496,12 @@
     closePad();
     render();
     if (startTimer) timerStart();
+    if (isNewDay && C.getTraining(state, curDate)) {
+      var g = C.goalStatus(state, today);
+      if (g && g.phase === 'running') {
+        toast(g.reached ? '🎉 Besuch ' + g.count + ' – Ziel erreicht!' : '💪 Besuch ' + g.count + ' von ' + g.target + ' – ' + goalTexts(g).status.replace(/^[↑↓✓] /, ''));
+      }
+    }
 
     // Nach dem Bestätigen direkt zum nächsten Feld springen
     if (value !== null && o.kind !== 'bw') {
@@ -593,6 +648,7 @@
   }
 
   function renderAllTrainings(body) {
+    renderGoalCard(body);
     var list = state.trainings.slice().reverse();
     body.appendChild(h('div', { class: 'hist-title', text: list.length + (list.length === 1 ? ' Training' : ' Trainings') + ' · zum Bearbeiten antippen' }));
     var order = state.exercises.map(function (e) { return e.id; });
@@ -701,6 +757,68 @@
       ]));
     });
     el.appendChild(vals);
+  }
+
+  // Ist-Kurve (kumulierte Besuche) gegen die Soll-Linie über den ganzen Zeitraum
+  function renderGoalCard(body) {
+    var today = C.todayKey();
+    var g = C.goalStatus(state, today);
+    if (!g) return;
+    var tx = goalTexts(g);
+    var card = h('div', { class: 'card' });
+    card.appendChild(h('h2', { text: 'Gym-Besuche · Ziel ' + g.target + ' bis ' + C.formatDate(g.end, 'dm') }));
+
+    var wrap = h('div', { class: 'chart-wrap' });
+    card.appendChild(wrap);
+    var W = Math.max(280, Math.round(body.clientWidth || 340)), H = 190;
+    var padL = 30, padR = 34, padT = 12, plotB = H - 26;
+    // Teilstriche möglichst so, dass das Ziel genau auf einer Linie liegt (75 → 0/25/50/75)
+    var step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250].filter(function (st) {
+      return g.target % st === 0 && g.target / st >= 2 && g.target / st <= 5;
+    })[0] || Math.max(1, Math.round(niceStep(g.target, 3)));
+    var hi = Math.ceil(g.target / step) * step;
+    function X(key) { return padL + Math.min(Math.max(C.daysBetween(g.start, key), 0), g.total - 1) / (g.total - 1) * (W - padL - padR); }
+    function Y(v) { return plotB - v / hi * (plotB - padT); }
+    var svg = s('svg', { class: 'chart', viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, role: 'img',
+      'aria-label': 'Gym-Besuche: ' + g.count + ' von ' + g.target + ', Soll bisher ' + C.fmtNum(Math.round(g.expected * 10) / 10) });
+    for (var v = 0; v <= hi; v += step) {
+      svg.appendChild(s('line', { class: 'c-grid', x1: padL, x2: W - padR + 4, y1: Y(v), y2: Y(v) }));
+      svg.appendChild(s('text', { class: 'c-axis', x: padL - 6, y: Y(v) + 4, 'text-anchor': 'end' }, String(v)));
+    }
+    svg.appendChild(s('text', { class: 'c-axis', x: padL, y: H - 6, 'text-anchor': 'start' }, C.formatDate(g.start, 'dm')));
+    svg.appendChild(s('text', { class: 'c-axis', x: W - padR, y: H - 6, 'text-anchor': 'end' }, C.formatDate(g.end, 'dm')));
+
+    // Soll-Linie
+    svg.appendChild(s('line', { class: 'c-plan', x1: X(g.start), y1: Y(0), x2: X(g.end), y2: Y(g.target) }));
+    svg.appendChild(s('text', { class: 'c-lbl', x: W - padR + 6, y: Y(g.target) + 4 }, 'Soll'));
+
+    // Ist-Treppe bis heute
+    if (g.phase !== 'before') {
+      var last = today > g.end ? g.end : today;
+      var xt = X(last);
+      if (g.phase === 'running') svg.appendChild(s('line', { class: 'c-today', x1: xt, x2: xt, y1: padT, y2: plotB }));
+      var d = 'M' + X(g.start).toFixed(1) + ' ' + Y(0).toFixed(1), n = 0;
+      g.dates.slice().sort().forEach(function (dt) {
+        var x = X(dt).toFixed(1);
+        d += ' L' + x + ' ' + Y(n).toFixed(1);
+        n++;
+        d += ' L' + x + ' ' + Y(n).toFixed(1);
+      });
+      d += ' L' + xt.toFixed(1) + ' ' + Y(n).toFixed(1);
+      svg.appendChild(s('path', { class: 'c-ist', d: d }));
+      svg.appendChild(s('circle', { class: 'c-dot', cx: xt, cy: Y(n), r: 4.5, style: 'fill:var(--accent)' }));
+      var ly = Y(n) - 9 < padT + 4 ? Y(n) + 16 : Y(n) - 9;
+      svg.appendChild(s('text', { class: 'c-lbl', x: xt, y: ly, 'text-anchor': xt > W - padR - 20 ? 'end' : 'middle' }, 'Ist ' + n));
+    }
+    wrap.appendChild(svg);
+
+    card.appendChild(h('div', { class: 'goal-status ' + tx.cls, style: 'margin-top:8px', text: tx.status }));
+    card.appendChild(h('div', { class: 'goal-stats' }, [
+      h('div', {}, [h('div', { class: 'k', text: 'Geschafft' }), h('div', { class: 'v', text: String(g.count) })]),
+      h('div', {}, [h('div', { class: 'k', text: 'Soll bisher' }), h('div', { class: 'v', text: String(Math.round(g.expected)) })]),
+      h('div', {}, [h('div', { class: 'k', text: 'Pro Woche nötig' }), h('div', { class: 'v', text: g.reached ? '–' : C.fmtNum(Math.round(g.perWeek * 10) / 10) + '×' })])
+    ]));
+    body.appendChild(card);
   }
 
   function niceStep(range, target) {
@@ -845,6 +963,10 @@
   }
 
   function renderMore() {
+    var gs = state.settings.goal;
+    $('goalInfo').textContent = gs.on
+      ? gs.target + ' Besuche vom ' + C.formatDate(gs.start, 'long') + ' bis ' + C.formatDate(gs.end, 'long') + '. Jeder Tag mit einem Eintrag zählt als Besuch.'
+      : 'Ausgeschaltet.';
     // Übungen
     var box = $('exManage');
     box.textContent = '';
@@ -989,6 +1111,46 @@
   }
 
   $('exAdd').addEventListener('click', function () { editExercise(null, false); });
+
+  function editGoal() {
+    var gs = state.settings.goal;
+    var num = h('input', { type: 'text', inputmode: 'numeric', maxlength: '4', autocomplete: 'off' });
+    num.value = String(gs.target);
+    var from = h('input', { type: 'date', class: 'dlg-date' }); from.value = gs.start;
+    var to = h('input', { type: 'date', class: 'dlg-date' }); to.value = gs.end;
+    var on = gs.on;
+    var toggle = h('div', { class: 'segmented' });
+    [[true, 'Anzeigen'], [false, 'Aus']].forEach(function (o) {
+      toggle.appendChild(h('button', {
+        'aria-pressed': String(on === o[0]), text: o[1],
+        onclick: function () {
+          on = o[0];
+          toggle.querySelectorAll('button').forEach(function (b, k) { b.setAttribute('aria-pressed', String(k === (on ? 0 : 1))); });
+        }
+      }));
+    });
+    openDialog([
+      h('h2', { text: 'Gym-Ziel' }),
+      h('label', { class: 'fl', text: 'Anzahl Besuche' }), num,
+      h('label', { class: 'fl', text: 'Von' }), from,
+      h('label', { class: 'fl', text: 'Bis' }), to,
+      h('label', { class: 'fl', text: 'Auf der Trainingsseite' }), toggle,
+      h('div', { class: 'dlg-row dlg-actions' }, [
+        h('button', { class: 'btn', text: 'Abbrechen', onclick: closeDialog }),
+        h('button', {
+          class: 'btn btn-primary', text: 'Speichern', onclick: function () {
+            var tg = parseInt(num.value, 10);
+            if (!(tg >= 1 && tg <= 1000)) { toast('Bitte eine Anzahl zwischen 1 und 1000 eingeben.', true); return; }
+            if (!C.isValidKey(from.value) || !C.isValidKey(to.value) || to.value <= from.value) { toast('Das Enddatum muss nach dem Startdatum liegen.', true); return; }
+            state.settings.goal = { on: on, target: tg, start: from.value, end: to.value };
+            save(); closeDialog(); render();
+            toast('Ziel gespeichert');
+          }
+        })
+      ])
+    ]);
+  }
+  $('goalEdit').addEventListener('click', editGoal);
 
   $('restSeg').addEventListener('click', function (e) {
     var b = e.target.closest('button');
