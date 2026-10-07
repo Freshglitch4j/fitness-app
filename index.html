@@ -42,6 +42,15 @@
       </div>
     </div>
 
+    <div class="installbar" id="installBar" hidden>
+      <div class="ib-text">
+        <strong>Als App installieren</strong>
+        <span>Eigenes Symbol, Vollbild, offline nutzbar.</span>
+      </div>
+      <button class="ib-btn" id="installBtn">Installieren</button>
+      <button class="ib-x" id="installHide" aria-label="Hinweis ausblenden">✕</button>
+    </div>
+
     <button class="bwrow" id="bwBtn">
       <span class="bw-k">Körpergewicht</span>
       <span class="bw-v" id="bwVal">–</span>
@@ -67,6 +76,12 @@
   <section id="view-more" class="view" aria-label="Einstellungen">
     <div class="topbar">
       <div class="tb-title"><h1>Einstellungen</h1></div>
+    </div>
+
+    <div class="card" id="installCard" hidden>
+      <h2>App installieren</h2>
+      <p class="hint" id="installHint">Legt Fitness als eigene App auf den Startbildschirm.</p>
+      <button class="btn btn-primary" id="installBtn2">Jetzt installieren</button>
     </div>
 
     <div class="card">

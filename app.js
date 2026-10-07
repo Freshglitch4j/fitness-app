@@ -6,7 +6,7 @@
   'use strict';
 
   var C = window.FitCore;
-  var APP_VERSION = '3';
+  var APP_VERSION = '4';
   var KEY = 'fitness.v1';
   var KEY_UNDO = 'fitness.undoImport';
 
@@ -1065,6 +1065,55 @@
       render();
       toast('Vorheriger Stand wiederhergestellt');
     });
+  });
+
+  // ================================================================ INSTALLIEREN
+
+  // Eigener Installieren-Knopf über das Ereignis „beforeinstallprompt“.
+  // Er nutzt Chromes regulären Installationsweg und umgeht damit den
+  // Menüdialog „Installieren und Verknüpfung erstellen“, der auf manchen
+  // Geräten fälschlich „bereits installiert“ meldet.
+  var KEY_INSTALL_HIDE = 'fitness.installHidden';
+  var installEvt = null;
+
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  }
+
+  function installUi() {
+    var can = !!installEvt && !isStandalone();
+    var hidden = false;
+    try { hidden = localStorage.getItem(KEY_INSTALL_HIDE) === '1'; } catch (e) { /* egal */ }
+    $('installBar').hidden = !can || hidden;
+    $('installCard').hidden = !can;
+  }
+
+  function doInstall() {
+    if (!installEvt) return;
+    var evt = installEvt;
+    installEvt = null;
+    evt.prompt();
+    evt.userChoice.then(function (choice) {
+      if (choice && choice.outcome === 'accepted') toast('Wird installiert – das Symbol erscheint gleich');
+      installUi();
+    }).catch(function () { installUi(); });
+  }
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    installEvt = e;
+    installUi();
+  });
+  window.addEventListener('appinstalled', function () {
+    installEvt = null;
+    installUi();
+    toast('Fitness ist installiert');
+  });
+  $('installBtn').addEventListener('click', doInstall);
+  $('installBtn2').addEventListener('click', doInstall);
+  $('installHide').addEventListener('click', function () {
+    try { localStorage.setItem(KEY_INSTALL_HIDE, '1'); } catch (e) { /* egal */ }
+    installUi();
   });
 
   // ================================================================ START
