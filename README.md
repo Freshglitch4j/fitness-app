@@ -25,7 +25,11 @@ sind trotzdem da, weil sie an `freshglitch4j.github.io` hängen, nicht am Ordner
 ### Auf den Startbildschirm des Galaxy A55
 
 1. **Chrome** öffnen (nicht Samsung Internet) und die Adresse oben aufrufen.
-2. Oben rechts **⋮** → **Zum Startbildschirm hinzufügen** → **Installieren**.
+2. Oben in der App auf **Installieren** im Kasten „Als App installieren“ tippen
+   (gibt es auch unter *Einstellungen → App installieren*) und bestätigen.
+   **Nicht** über das Chrome-Menü „Installieren und Verknüpfung erstellen“:
+   Weil unter `freshglitch4j.github.io` schon andere Apps installiert sind,
+   meldet dieser Dialog fälschlich „bereits installiert“.
 3. Das Petrol-Symbol mit der Hantel erscheint auf dem Startbildschirm.
    Ab jetzt die App immer darüber öffnen – sie läuft dann wie eine normale App,
    ohne Adressleiste, und funktioniert auch ohne Internet.
