@@ -42,6 +42,11 @@
       </div>
     </div>
 
+    <div class="segmented dayseg" id="daySeg" role="group" aria-label="Trainingstag">
+      <button data-v="A">Oberkörper</button>
+      <button data-v="B">Unterkörper</button>
+    </div>
+
     <button class="goal" id="goalBox" hidden></button>
 
     <div class="installbar" id="installBar" hidden>
@@ -84,6 +89,15 @@
       <h2>App installieren</h2>
       <p class="hint" id="installHint">Legt Fitness als eigene App auf den Startbildschirm.</p>
       <button class="btn btn-primary" id="installBtn2">Jetzt installieren</button>
+    </div>
+
+    <div class="card">
+      <h2>Trainingsplan</h2>
+      <p class="hint">Beim Zweier-Split zeigt das Training nur die Übungen des Tages und schlägt abwechselnd Ober- und Unterkörper vor.</p>
+      <div class="segmented" id="splitSeg">
+        <button data-v="1">Zweier-Split</button>
+        <button data-v="0">Alle Übungen</button>
+      </div>
     </div>
 
     <div class="card">

@@ -9,20 +9,32 @@
   var WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
   var MAX_SETS = 6;
 
+  // Unterkörper-Tag (ab Version 2 dazugekommen)
+  var LOWER_BODY = [
+    ['kniebeugen', 'Kniebeugen', 'weight', 'B'],
+    ['wadenheben', 'Wadenheben', 'weight', 'B'],
+    ['schienbein', 'Schienbeinheben', 'body', 'B'],
+    ['hipthrust', 'Hip Thrusts', 'weight', 'B'],
+    ['abduktoren', 'Abduktoren', 'weight', 'B'],
+    ['adduktoren', 'Adduktoren', 'weight', 'B']
+  ];
+  var DAY_NAMES = { A: 'Oberkörper', B: 'Unterkörper' };
+
   // Startliste nach der Papierkarte. type: 'weight' = mit Zusatzgewicht,
   // 'body' = Körpergewicht (Gewicht kann trotzdem eingetragen werden).
+  // days: an welchem Trainingstag des Zweier-Splits die Übung dran ist
+  // ('A' = Oberkörper, 'B' = Unterkörper).
   var DEFAULT_EXERCISES = [
-    ['latzug', 'Latzug', 'weight'],
-    ['rudern', 'Rudern', 'weight'],
-    ['bizeps', 'Bizepscurls KH', 'weight'],
-    ['schulter', 'Schulterdrücken', 'weight'],
-    ['seitheben', 'Seitheben KH', 'weight'],
-    ['trizeps', 'Trizeps gr. M.', 'weight'],
-    ['ruecken', 'Unterer Rücken', 'body'],
-    ['bauch-seitl', 'Bauch seitlich', 'body'],
-    ['nacken', 'Nacken', 'body'],
-    ['bauch', 'Bauch', 'body']
-  ];
+    ['latzug', 'Latzug', 'weight', 'A'],
+    ['rudern', 'Rudern', 'weight', 'A'],
+    ['bizeps', 'Bizepscurls KH', 'weight', 'A'],
+    ['schulter', 'Schulterdrücken', 'weight', 'A'],
+    ['seitheben', 'Seitheben KH', 'weight', 'A'],
+    ['trizeps', 'Trizeps gr. M.', 'weight', 'A'],
+    ['ruecken', 'Unterer Rücken', 'body', 'A'],
+    ['bauch-seitl', 'Bauch seitlich', 'body', 'A'],
+    ['nacken', 'Nacken', 'body', 'A']
+  ].concat(LOWER_BODY, [['bauch', 'Bauch', 'body', 'AB']]);
 
   // ------------------------------------------------------------ Datum
 
@@ -105,7 +117,7 @@
 
   function defaultSettings() {
     return {
-      theme: 'dark', restSec: 90, lastBackup: null,
+      theme: 'dark', restSec: 90, lastBackup: null, split: true,
       // Gym-Ziel: Anzahl Besuche (= Trainingstage) im Zeitraum
       goal: { on: true, target: 75, start: '2026-10-07', end: '2027-03-31' }
     };
@@ -113,9 +125,9 @@
 
   function defaultState() {
     return {
-      version: 1,
+      version: 2,
       exercises: DEFAULT_EXERCISES.map(function (e) {
-        return { id: e[0], name: e[1], type: e[2], sets: 3, hidden: false };
+        return { id: e[0], name: e[1], type: e[2], sets: 3, hidden: false, days: e[3].split('') };
       }),
       trainings: [],
       settings: defaultSettings()
@@ -149,9 +161,26 @@
           name: name,
           type: e.type === 'body' ? 'body' : 'weight',
           sets: sets >= 1 && sets <= MAX_SETS ? sets : 3,
-          hidden: !!e.hidden
+          hidden: !!e.hidden,
+          days: cleanDays(e.days)
         });
       });
+      // Umstellung auf Version 2 (Zweier-Split): Unterkörper-Übungen ergänzen,
+      // Bauch an beiden Tagen. Bisherige Übungen gehören zum Oberkörper-Tag.
+      if (!(raw.version >= 2)) {
+        // Bauch ans Ende, damit er an beiden Tagen als letzte Übung kommt
+        var bauch = null;
+        out.exercises = out.exercises.filter(function (e) {
+          if (e.id === 'bauch') { bauch = e; return false; }
+          return true;
+        });
+        LOWER_BODY.forEach(function (d) {
+          if (!seen[d[0]]) out.exercises.push({ id: d[0], name: d[1], type: d[2], sets: 3, hidden: false, days: ['B'] });
+        });
+        if (bauch) bauch.days = ['A', 'B'];
+        else bauch = { id: 'bauch', name: 'Bauch', type: 'body', sets: 3, hidden: false, days: ['B'] };
+        out.exercises.push(bauch);
+      }
     }
     var exIds = {};
     out.exercises.forEach(function (e) { exIds[e.id] = true; });
@@ -182,6 +211,7 @@
           date: t.date,
           createdAt: typeof t.createdAt === 'string' && !isNaN(new Date(t.createdAt)) ? t.createdAt : null,
           bodyweight: cleanNum(t.bodyweight, 400),
+          day: t.day === 'A' || t.day === 'B' ? t.day : null,
           entries: entries
         };
         if (!trainingIsEmpty(tr)) { byDate[t.date] = true; out.trainings.push(tr); }
@@ -195,6 +225,7 @@
       var rest = parseInt(s.restSec, 10);
       if ([0, 60, 90, 120, 180].indexOf(rest) >= 0) out.settings.restSec = rest;
       if (typeof s.lastBackup === 'string') out.settings.lastBackup = s.lastBackup;
+      if (s.split === false) out.settings.split = false;
       if (s.goal && typeof s.goal === 'object') {
         var g = s.goal, tg = parseInt(g.target, 10);
         if (tg >= 1 && tg <= 1000 && isValidKey(g.start) && isValidKey(g.end) && g.end > g.start) {
@@ -238,7 +269,7 @@
   function ensureTraining(state, date, nowIso) {
     var t = getTraining(state, date);
     if (t) return t;
-    t = { id: uid('t'), date: date, createdAt: nowIso || new Date().toISOString(), bodyweight: null, entries: {} };
+    t = { id: uid('t'), date: date, createdAt: nowIso || new Date().toISOString(), bodyweight: null, day: null, entries: {} };
     state.trainings.push(t);
     sortTrainings(state.trainings);
     return t;
@@ -267,6 +298,31 @@
     var n = 1;
     state.trainings.forEach(function (t) { if (t.date < date) n++; });
     return n;
+  }
+
+  function cleanDays(d) {
+    if (!Array.isArray(d)) return ['A'];
+    var out = ['A', 'B'].filter(function (k) { return d.indexOf(k) >= 0; });
+    return out.length ? out : ['A'];
+  }
+
+  // Trainingstag eines Trainings. Ältere Trainings ohne Angabe: Unterkörper,
+  // wenn eine reine Unterkörper-Übung drin ist, sonst Oberkörper.
+  function trainingDay(state, t) {
+    if (t.day) return t.day;
+    var b = Object.keys(t.entries).some(function (k) {
+      var ex = findExercise(state, k);
+      return ex && ex.days.length === 1 && ex.days[0] === 'B';
+    });
+    return b ? 'B' : 'A';
+  }
+
+  // Vorschlag für einen Tag ohne Training: abwechselnd zum letzten Training davor.
+  function suggestDay(state, date) {
+    for (var i = state.trainings.length - 1; i >= 0; i--) {
+      if (state.trainings[i].date < date) return trainingDay(state, state.trainings[i]) === 'A' ? 'B' : 'A';
+    }
+    return 'A';
   }
 
   function findExercise(state, id) {
@@ -391,7 +447,7 @@
   function buildExport(state) {
     return {
       app: 'fitness',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       exercises: state.exercises,
       trainings: state.trainings,
@@ -418,7 +474,7 @@
       s = String(s === null || s === undefined ? '' : s);
       return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     }
-    var head = ['Training', 'Datum', 'Beginn', 'Übung', 'Gewicht (kg)'];
+    var head = ['Training', 'Datum', 'Beginn', 'Trainingstag', 'Übung', 'Gewicht (kg)'];
     for (var i = 1; i <= maxSets; i++) head.push('Satz ' + i);
     head.push('Notiz', 'Körpergewicht (kg)');
     var lines = [head.map(q).join(';')];
@@ -432,7 +488,7 @@
       keys.forEach(function (k) {
         var ex = k ? findExercise(state, k) : null;
         var e = k ? t.entries[k] : { weight: null, sets: [], note: '' };
-        var row = [idx + 1, datum, beginn, ex ? ex.name : '', fmtNum(e.weight)];
+        var row = [idx + 1, datum, beginn, state.settings.split === false ? '' : DAY_NAMES[trainingDay(state, t)], ex ? ex.name : '', fmtNum(e.weight)];
         for (var s = 0; s < maxSets; s++) row.push(e.sets[s] === true ? 'x' : fmtNum(e.sets[s]));
         row.push(e.note || '', fmtNum(t.bodyweight));
         lines.push(row.map(q).join(';'));
@@ -455,6 +511,7 @@
     pad2: pad2, dateKey: dateKey, parseKey: parseKey, isValidKey: isValidKey, todayKey: todayKey,
     addMonths: addMonths, addDays: addDays, daysBetween: daysBetween, formatDate: formatDate, formatTime: formatTime,
     fmtNum: fmtNum, parseNum: parseNum, roundTo: roundTo,
+    DAY_NAMES: DAY_NAMES, trainingDay: trainingDay, suggestDay: suggestDay,
     uid: uid, defaultState: defaultState, sanitizeState: sanitizeState,
     hasData: hasData, entryDone: entryDone, trainingIsEmpty: trainingIsEmpty,
     getTraining: getTraining, ensureTraining: ensureTraining, ensureEntry: ensureEntry, tidyTraining: tidyTraining,

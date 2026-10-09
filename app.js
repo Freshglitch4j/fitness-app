@@ -6,7 +6,7 @@
   'use strict';
 
   var C = window.FitCore;
-  var APP_VERSION = '5';
+  var APP_VERSION = '6';
   var KEY = 'fitness.v1';
   var KEY_UNDO = 'fitness.undoImport';
 
@@ -95,9 +95,30 @@
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
   }
 
+  var dayChoice = {}; // gewählter Trainingstag für Tage ohne gespeichertes Training
+
+  function splitOn() { return state.settings.split !== false; }
+
+  function currentDay() {
+    var t = C.getTraining(state, curDate);
+    if (t) return C.trainingDay(state, t);
+    return dayChoice[curDate] || C.suggestDay(state, curDate);
+  }
+
+  // Training für den angezeigten Tag anlegen und den Trainingstag festhalten
+  function ensureCurTraining(nowIso) {
+    var d = currentDay();
+    var t = C.ensureTraining(state, curDate, nowIso);
+    if (!t.day) t.day = d;
+    return t;
+  }
+
   function visibleExercises(training) {
+    var day = currentDay();
     return state.exercises.filter(function (e) {
-      return !e.hidden || (training && training.entries[e.id]);
+      if (training && training.entries[e.id]) return true;
+      if (e.hidden) return false;
+      return !splitOn() || e.days.indexOf(day) >= 0;
     });
   }
 
@@ -172,6 +193,10 @@
     $('trDelete').hidden = !t;
 
     renderGoalBox();
+    var seg = $('daySeg');
+    seg.hidden = !splitOn();
+    var day = currentDay();
+    seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === day)); });
 
     var bw = t ? t.bodyweight : null;
     var bwEl = $('bwVal');
@@ -234,6 +259,15 @@
     box.appendChild(h('div', { class: 'goal-meta', text: tx.meta }));
     if (tx.week) box.appendChild(h('div', { class: 'goal-meta', text: tx.week }));
   }
+
+  $('daySeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    var t = C.getTraining(state, curDate);
+    if (t) { t.day = b.dataset.v; save(); }
+    else dayChoice[curDate] = b.dataset.v;
+    renderTrain();
+  });
 
   $('goalBox').addEventListener('click', function () { statSel = ALL; showView('stats'); });
 
@@ -317,7 +351,7 @@
           class: 'btn btn-primary', text: 'Speichern', onclick: function () {
             var text = ta.value.trim();
             if (text || entry) {
-              var tr = C.ensureTraining(state, curDate);
+              var tr = ensureCurTraining();
               C.ensureEntry(tr, ex.id).note = text;
               C.tidyTraining(state, curDate);
               save();
@@ -466,7 +500,7 @@
     var nowIso = curDate === today ? new Date().toISOString() : null;
     var t = C.getTraining(state, curDate);
     var isNewDay = !t && value !== null && curDate === today;
-    if (value !== null) t = C.ensureTraining(state, curDate, nowIso);
+    if (value !== null) t = ensureCurTraining(nowIso);
     var startTimer = false;
 
     if (t) {
@@ -667,6 +701,7 @@
         h('div', { class: 'tcard-head' }, [
           h('span', { class: 'n', text: String(nr) }),
           h('span', { class: 'd', text: C.formatDate(t.date, 'short') }),
+          splitOn() ? h('span', { class: 'day', text: C.DAY_NAMES[C.trainingDay(state, t)] }) : null,
           t.bodyweight !== null ? h('span', { class: 'bw', text: C.fmtNum(t.bodyweight) + ' kg' }) : null
         ])
       ].concat(lines)));
@@ -972,7 +1007,8 @@
     box.textContent = '';
     var used = exercisesWithData();
     state.exercises.forEach(function (ex, i) {
-      var meta = (ex.type === 'body' ? 'Körpergewicht' : 'mit Gewicht') + ' · ' + ex.sets + (ex.sets === 1 ? ' Satz' : ' Sätze') + (ex.hidden ? ' · ausgeblendet' : '');
+      var dayLbl = !splitOn() ? '' : ex.days.length === 2 ? 'beide Tage · ' : C.DAY_NAMES[ex.days[0]] + ' · ';
+      var meta = dayLbl + (ex.type === 'body' ? 'Körpergewicht' : 'mit Gewicht') + ' · ' + ex.sets + (ex.sets === 1 ? ' Satz' : ' Sätze') + (ex.hidden ? ' · ausgeblendet' : '');
       box.appendChild(h('div', { class: 'mrow' + (ex.hidden ? ' is-hidden' : '') }, [
         h('button', { class: 'mrow-main', onclick: function () { editExercise(ex, !!used[ex.id]); } }, [
           h('span', { class: 'mrow-name', text: ex.name }),
@@ -983,6 +1019,9 @@
       ]));
     });
 
+    document.querySelectorAll('#splitSeg button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String((b.dataset.v === '1') === splitOn()));
+    });
     document.querySelectorAll('#restSeg button').forEach(function (b) {
       b.setAttribute('aria-pressed', String(+b.dataset.v === state.settings.restSec));
     });
@@ -1026,7 +1065,8 @@
 
   function editExercise(ex, hasData) {
     var isNew = !ex;
-    var draft = ex ? { name: ex.name, type: ex.type, sets: ex.sets, hidden: ex.hidden } : { name: '', type: 'weight', sets: 3, hidden: false };
+    var draft = ex ? { name: ex.name, type: ex.type, sets: ex.sets, hidden: ex.hidden, days: ex.days.join('') }
+      : { name: '', type: 'weight', sets: 3, hidden: false, days: currentDay() };
 
     var name = h('input', { type: 'text', maxlength: '40', placeholder: 'z. B. Beinpresse', autocomplete: 'off' });
     name.value = draft.name;
@@ -1042,6 +1082,17 @@
       }));
     });
 
+    var daySeg = h('div', { class: 'segmented' });
+    [['A', 'Oberkörper'], ['B', 'Unterkörper'], ['AB', 'Beide']].forEach(function (o) {
+      daySeg.appendChild(h('button', {
+        'aria-pressed': String(draft.days === o[0]), text: o[1],
+        onclick: function () {
+          draft.days = o[0];
+          daySeg.querySelectorAll('button').forEach(function (b, k) { b.setAttribute('aria-pressed', String(['A', 'B', 'AB'][k] === o[0])); });
+        }
+      }));
+    });
+
     var out = h('output', { text: String(draft.sets) });
     var stepper = h('div', { class: 'stepper' }, [
       h('button', { text: '−', 'aria-label': 'weniger Sätze', onclick: function () { draft.sets = Math.max(1, draft.sets - 1); out.textContent = draft.sets; } }),
@@ -1053,9 +1104,9 @@
       var n = name.value.trim().slice(0, 40);
       if (!n) { toast('Bitte einen Namen eingeben.', true); name.focus(); return; }
       if (isNew) {
-        state.exercises.push({ id: C.makeExerciseId(n, state), name: n, type: draft.type, sets: draft.sets, hidden: false });
+        state.exercises.push({ id: C.makeExerciseId(n, state), name: n, type: draft.type, sets: draft.sets, hidden: false, days: draft.days.split('') });
       } else {
-        ex.name = n; ex.type = draft.type; ex.sets = draft.sets;
+        ex.name = n; ex.type = draft.type; ex.sets = draft.sets; ex.days = draft.days.split('');
       }
       save();
       closeDialog();
@@ -1067,6 +1118,7 @@
       h('h2', { text: isNew ? 'Neue Übung' : 'Übung bearbeiten' }),
       h('label', { class: 'fl', text: 'Name' }), name,
       h('label', { class: 'fl', text: 'Art' }), typeSeg,
+      splitOn() ? h('label', { class: 'fl', text: 'Trainingstag' }) : null, splitOn() ? daySeg : null,
       h('label', { class: 'fl', text: 'Sätze (Standard)' }), stepper,
       h('div', { class: 'dlg-row dlg-actions' }, [
         h('button', { class: 'btn', text: 'Abbrechen', onclick: closeDialog }),
@@ -1151,6 +1203,14 @@
     ]);
   }
   $('goalEdit').addEventListener('click', editGoal);
+
+  $('splitSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    state.settings.split = b.dataset.v === '1';
+    save();
+    renderMore();
+  });
 
   $('restSeg').addEventListener('click', function (e) {
     var b = e.target.closest('button');

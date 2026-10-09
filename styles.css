@@ -137,6 +137,9 @@ body.has-timer .app { padding-bottom: calc(160px + env(safe-area-inset-bottom));
 
 /* ------------------------------------------------------------- Training */
 
+.dayseg { margin-bottom: 12px; }
+.dayseg button { min-height: 44px; font-size: 15px; }
+
 /* Gym-Ziel */
 .goal {
   width: 100%; display: block; text-align: left;
@@ -386,6 +389,7 @@ svg.chart text { font-family: inherit; font-variant-numeric: tabular-nums; }
 .tcard-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .tcard-head .n { color: var(--accent); font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
 .tcard-head .d { font-size: 14.5px; }
+.tcard-head .day { font-size: 12.5px; color: var(--accent); }
 .tcard-head .bw { margin-left: auto; font-size: 12.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .tline { display: flex; gap: 10px; font-size: 13.5px; padding: 3px 0; border-top: 1px solid var(--line-soft); }
 .tline .tn { flex: 1 1 auto; color: var(--text-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -63,6 +63,23 @@ Unten gibt es drei Bereiche: **Training**, **Analyse** und **Einstellungen**.
 - **Körpergewicht** ganz oben ist freiwillig.
 - Erledigte Übungen bekommen links einen Petrol-Streifen und ein ✓.
 
+### Zweier-Split: Oberkörper / Unterkörper
+
+Oben im Training wählst du den Trainingstag: **Oberkörper** oder **Unterkörper**.
+Angezeigt werden nur die Übungen dieses Tages. Die App schlägt automatisch
+abwechselnd vor: nach einem Oberkörper-Training kommt Unterkörper und umgekehrt.
+Ein Tipp auf den anderen Knopf wechselt jederzeit; schon eingetragene Übungen
+bleiben dabei sichtbar.
+
+- **Oberkörper:** Latzug, Rudern, Bizepscurls KH, Schulterdrücken, Seitheben KH,
+  Trizeps gr. M., Unterer Rücken, Bauch seitlich, Nacken, Bauch
+- **Unterkörper:** Kniebeugen, Wadenheben, Schienbeinheben (Tibialis), Hip Thrusts,
+  Abduktoren, Adduktoren, Bauch
+
+Welche Übung an welchem Tag kommt (Oberkörper, Unterkörper oder beide), stellst
+du unter *Einstellungen → Übungen → Übung antippen → Trainingstag* ein. Wer
+immer alle Übungen sehen will: *Einstellungen → Trainingsplan → Alle Übungen*.
+
 ### Gym-Ziel
 
 Oben im Training zeigt eine Karte den Fortschritt zum Ziel – voreingestellt
