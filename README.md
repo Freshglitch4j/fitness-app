@@ -56,6 +56,15 @@ Unten gibt es drei Bereiche: **Training**, **Analyse** und **Einstellungen**.
   - **✓ ohne Zahl** hakt einen Satz ab, ohne Wiederholungen zu zählen
     (z. B. für Bauch, Nacken).
   - **Leeren** löscht den Wert.
+- **Andere Maschine:** Musstest du für eine Übung ein anderes Gerät nehmen, tippe
+  im Gewichtsfeld auf **✓ andere Maschine** statt ein Gewicht einzutragen.
+  Wiederholungen trägst du wie gewohnt ein (oder hakst sie ab). In der Analyse
+  zählt dieses Training dann nicht mit den echten Werten: Sobald du die Übung
+  wieder an der gewohnten Maschine gemacht hast, setzt die App dort den
+  **Mittelwert aus dem Training davor und danach** ein (hohler Punkt im
+  Diagramm, „geschätzt“). Bis dahin bleibt der Punkt leer. Für die Vorbelegung
+  beim nächsten Mal nimmt die App die Werte vom letzten Training an der
+  gewohnten Maschine.
 - Nach dem ersten Satz übernimmt die App automatisch das Gewicht vom letzten Mal.
   Hat sich das Gewicht geändert, das Gewichtsfeld antippen und anpassen.
 - **+** am Zeilenende fügt einen weiteren Satz hinzu (bis 6).

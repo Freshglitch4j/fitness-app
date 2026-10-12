@@ -199,7 +199,8 @@
               return cleanNum(v, 999);
             }) : [];
             var entry = {
-              weight: cleanNum(en.weight, 999),
+              // true = andere Maschine (Gewicht nicht vergleichbar)
+              weight: en.weight === true ? true : cleanNum(en.weight, 999),
               sets: sets,
               note: typeof en.note === 'string' ? en.note.slice(0, 500) : ''
             };
@@ -251,8 +252,12 @@
   }
 
   function entryDone(entry) {
-    return !!entry && (entry.sets || []).some(function (v) { return v !== null && v !== undefined; });
+    return !!entry && (entry.weight === true ||
+      (entry.sets || []).some(function (v) { return v !== null && v !== undefined; }));
   }
+
+  // Gewicht vergleichbar? (nicht „andere Maschine“)
+  function isOtherMachine(entry) { return !!entry && entry.weight === true; }
 
   function trainingIsEmpty(t) {
     return !t || (t.bodyweight === null || t.bodyweight === undefined) &&
@@ -336,7 +341,8 @@
       var t = state.trainings[i];
       if (t.date >= date) continue;
       var e = t.entries[exId];
-      if (e && (entryDone(e) || e.weight !== null)) return { training: t, entry: e };
+      // Trainings an einer anderen Maschine taugen nicht als Vorlage
+      if (e && !isOtherMachine(e) && (entryDone(e) || e.weight !== null)) return { training: t, entry: e };
     }
     return null;
   }
@@ -363,7 +369,8 @@
 
   function entrySummary(entry) {
     var parts = [];
-    if (entry.weight !== null && entry.weight !== undefined) parts.push(fmtNum(entry.weight) + ' kg');
+    if (entry.weight === true) parts.push('andere Maschine');
+    else if (entry.weight !== null && entry.weight !== undefined) parts.push(fmtNum(entry.weight) + ' kg');
     var sets = entry.sets.filter(function (v) { return v !== null && v !== undefined; }).map(setLabel);
     if (sets.length) parts.push(sets.join(' · '));
     return parts.join('  ·  ');
@@ -379,16 +386,43 @@
   }
 
   // Ein Punkt je Training: Datum, Nummer, Gewicht, Wiederholungen je Satz.
+  // Trainings an einer anderen Maschine („✓“ statt Gewicht) werden im Diagramm
+  // durch den Mittelwert aus dem vorigen und dem nächsten vergleichbaren
+  // Training ersetzt. Solange es noch kein nächstes gibt, bleibt der Punkt leer.
   function exerciseSeries(state, exId, fromKey) {
-    var rows = [];
-    var maxSets = 0;
+    var all = [];
     state.trainings.forEach(function (t, i) {
-      if (t.date < fromKey) return;
       var e = t.entries[exId];
       if (!e || !hasData(e)) return;
-      var ys = e.sets.map(function (v) { return typeof v === 'number' ? v : null; });
-      ys.forEach(function (v, k) { if (v !== null && k + 1 > maxSets) maxSets = k + 1; });
-      rows.push({ date: t.date, nr: i + 1, weight: e.weight, sets: e.sets.slice(), ys: ys, note: e.note });
+      all.push({
+        date: t.date, nr: i + 1, weight: e.weight, sets: e.sets.slice(), note: e.note,
+        other: isOtherMachine(e),
+        ys: e.sets.map(function (v) { return typeof v === 'number' ? v : null; })
+      });
+    });
+    all.forEach(function (r, i) {
+      if (!r.other) return;
+      var prev = null, next = null, k;
+      for (k = i - 1; k >= 0 && !prev; k--) if (!all[k].other) prev = all[k];
+      for (k = i + 1; k < all.length && !next; k++) if (!all[k].other) next = all[k];
+      r.weight = null;
+      r.ys = [];
+      r.est = null;
+      if (!next) return;                     // warten aufs nächste Training
+      var src = prev ? [prev, next] : [next];
+      var n = Math.max(prev ? prev.ys.length : 0, next.ys.length);
+      for (k = 0; k < n; k++) {
+        var vals = src.map(function (x) { return x.ys[k]; }).filter(function (v) { return typeof v === 'number'; });
+        r.ys.push(vals.length === src.length ? Math.round(vals.reduce(function (a, b) { return a + b; }, 0) / vals.length * 10) / 10 : null);
+      }
+      var ws = src.map(function (x) { return x.weight; }).filter(function (v) { return typeof v === 'number'; });
+      if (ws.length === src.length) r.weight = Math.round(ws.reduce(function (a, b) { return a + b; }, 0) / ws.length * 100) / 100;
+      r.est = src.map(function (x) { return x.date; });
+    });
+    var rows = all.filter(function (r) { return r.date >= fromKey; });
+    var maxSets = 0;
+    rows.forEach(function (r) {
+      r.ys.forEach(function (v, k) { if (v !== null && k + 1 > maxSets) maxSets = k + 1; });
     });
     return { rows: rows, maxSets: maxSets };
   }
@@ -488,7 +522,7 @@
       keys.forEach(function (k) {
         var ex = k ? findExercise(state, k) : null;
         var e = k ? t.entries[k] : { weight: null, sets: [], note: '' };
-        var row = [idx + 1, datum, beginn, state.settings.split === false ? '' : DAY_NAMES[trainingDay(state, t)], ex ? ex.name : '', fmtNum(e.weight)];
+        var row = [idx + 1, datum, beginn, state.settings.split === false ? '' : DAY_NAMES[trainingDay(state, t)], ex ? ex.name : '', e.weight === true ? 'andere Maschine' : fmtNum(e.weight)];
         for (var s = 0; s < maxSets; s++) row.push(e.sets[s] === true ? 'x' : fmtNum(e.sets[s]));
         row.push(e.note || '', fmtNum(t.bodyweight));
         lines.push(row.map(q).join(';'));
@@ -513,7 +547,7 @@
     fmtNum: fmtNum, parseNum: parseNum, roundTo: roundTo,
     DAY_NAMES: DAY_NAMES, trainingDay: trainingDay, suggestDay: suggestDay,
     uid: uid, defaultState: defaultState, sanitizeState: sanitizeState,
-    hasData: hasData, entryDone: entryDone, trainingIsEmpty: trainingIsEmpty,
+    hasData: hasData, entryDone: entryDone, isOtherMachine: isOtherMachine, trainingIsEmpty: trainingIsEmpty,
     getTraining: getTraining, ensureTraining: ensureTraining, ensureEntry: ensureEntry, tidyTraining: tidyTraining,
     trainingNumber: trainingNumber, findExercise: findExercise,
     lastEntryBefore: lastEntryBefore, lastBodyweightBefore: lastBodyweightBefore,

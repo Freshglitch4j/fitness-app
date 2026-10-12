@@ -347,12 +347,14 @@ svg.chart text { font-family: inherit; font-variant-numeric: tabular-nums; }
 .c-wline { stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.55; fill: none; }
 .c-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .c-dot { stroke: var(--bg-elev); stroke-width: 2; }
+.c-dot-est { fill: var(--bg-elev); stroke-width: 2; }
 .c-end { font-size: 11px; fill: var(--text-dim); }
 .c-hair { stroke: var(--text-faint); stroke-width: 1; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-dim); margin-top: 6px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .lkey { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
+.lkey-est { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--text-dim); display: inline-block; }
 
 .readout {
   min-height: 52px; margin-top: 10px; font-size: 13.5px; color: var(--text-dim);
@@ -360,6 +362,7 @@ svg.chart text { font-family: inherit; font-variant-numeric: tabular-nums; }
 }
 .readout .r-head { color: var(--text-dim); }
 .readout .r-head strong { color: var(--text); font-weight: 600; }
+.readout .r-note { font-size: 12.5px; color: var(--text-faint); margin-top: 2px; }
 .readout .r-vals { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
 .readout .r-vals span { display: inline-flex; align-items: center; gap: 6px; }
 .readout .r-vals b { color: var(--text); font-size: 16px; font-weight: 600; }

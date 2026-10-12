@@ -6,7 +6,7 @@
   'use strict';
 
   var C = window.FitCore;
-  var APP_VERSION = '6';
+  var APP_VERSION = '7';
   var KEY = 'fitness.v1';
   var KEY_UNDO = 'fitness.undoImport';
 
@@ -283,14 +283,15 @@
     var w = entry ? entry.weight : null;
     var ghostW = last && last.entry.weight !== null ? last.entry.weight : null;
     var wVal;
-    if (w !== null) wVal = h('span', { class: 'v', text: C.fmtNum(w) });
+    if (w === true) wVal = h('span', { class: 'v is-check', text: '✓' });
+    else if (w !== null) wVal = h('span', { class: 'v', text: C.fmtNum(w) });
     else if (ghostW !== null && ex.type === 'weight') wVal = h('span', { class: 'v is-ghost', text: C.fmtNum(ghostW) });
     else wVal = h('span', { class: 'v is-ghost', text: '–' });
     grid.appendChild(h('button', {
       class: 'cell cell-w' + (w !== null ? ' is-filled' : ''),
       'aria-label': ex.name + ' Gewicht',
       onclick: function () { openPad({ kind: 'w', exId: ex.id }); }
-    }, [wVal, h('small', { text: w === null && ex.type === 'body' ? 'ohne' : 'kg' })]));
+    }, [wVal, h('small', { text: w === true ? 'and. Masch.' : w === null && ex.type === 'body' ? 'ohne' : 'kg' })]));
 
     // Sätze
     for (var i = 0; i < n; i++) {
@@ -429,7 +430,7 @@
       sub = pre.own ? 'heute eingetragen' : pre.v !== null ? 'zuletzt ' + C.fmtNum(pre.v) + ' kg' : 'Schritt 0,1 kg';
     } else if (o.kind === 'w') {
       title = ex.name; unit = 'kg';
-      sub = 'Gewicht · ' + (pre.own ? 'eingetragen' : pre.v !== null ? 'zuletzt ' + C.fmtNum(pre.v) + ' kg' : 'Schritt 0,5 kg');
+      sub = 'Gewicht · ' + (pre.v === true ? 'andere Maschine' : pre.own ? 'eingetragen' : pre.v !== null ? 'zuletzt ' + C.fmtNum(pre.v) + ' kg' : 'Schritt 0,5 kg');
     } else {
       title = ex.name; unit = 'WH';
       var last = C.lastEntryBefore(state, o.exId, curDate);
@@ -439,8 +440,9 @@
     $('padTitle').textContent = title;
     $('padSub').textContent = sub;
     $('padUnit').textContent = unit;
-    $('padCheck').hidden = o.kind !== 's';
-    document.querySelector('.pad-actions').style.gridTemplateColumns = o.kind === 's' ? '' : '1fr 1.6fr';
+    $('padCheck').hidden = o.kind === 'bw';
+    $('padCheck').textContent = o.kind === 'w' ? '✓ andere Maschine' : '✓ ohne Zahl';
+    document.querySelector('.pad-actions').style.gridTemplateColumns = o.kind === 'bw' ? '1fr 1.6fr' : '';
     var n = ex ? C.setCount(ex, (C.getTraining(state, curDate) || { entries: {} }).entries[o.exId]) : 0;
     $('padOk').textContent = o.kind === 's' && o.idx + 1 < n ? 'OK · weiter' : o.kind === 'w' ? 'OK · weiter' : 'OK';
     $('pad').hidden = false;
@@ -742,10 +744,13 @@
       var wrap = h('div', { class: 'chart-wrap' });
       var readout = h('div', { class: 'readout', 'aria-live': 'polite' });
       card.appendChild(wrap);
-      if (series.length > 1) {
-        card.appendChild(h('div', { class: 'legend' }, series.map(function (sr) {
+      var hasEst = data.rows.some(function (r) { return r.other && r.est; });
+      if (series.length > 1 || hasEst) {
+        var leg = series.length > 1 ? series.map(function (sr) {
           return h('span', {}, [h('i', { class: 'lkey', style: 'background:' + sr.color }), sr.label]);
-        })));
+        }) : [];
+        if (hasEst) leg.push(h('span', {}, [h('i', { class: 'lkey-est' }), 'geschätzt (andere Maschine)']));
+        card.appendChild(h('div', { class: 'legend' }, leg));
       }
       card.appendChild(readout);
       lineChart(wrap, {
@@ -764,7 +769,7 @@
         var entry = !isBw && t ? t.entries[statSel] : null;
         var main = isBw ? C.fmtNum(r.ys[0]) + ' kg' : (entry.sets.filter(function (v) { return v !== null; }).map(C.setLabel).join(' · ') || '–');
         var meta = isBw ? C.formatDate(r.date, 'short')
-          : [C.formatDate(r.date, 'short'), entry.weight !== null ? C.fmtNum(entry.weight) + ' kg' : (ex && ex.type === 'body' ? 'ohne Gewicht' : ''), entry.note].filter(Boolean).join(' · ');
+          : [C.formatDate(r.date, 'short'), entry.weight === true ? 'andere Maschine' : entry.weight !== null ? C.fmtNum(entry.weight) + ' kg' : (ex && ex.type === 'body' ? 'ohne Gewicht' : ''), entry.note].filter(Boolean).join(' · ');
         body.appendChild(h('button', { class: 'hist-item', onclick: function () { openTraining(r.date); } }, [
           h('div', { class: 'hist-nr' }, [h('div', { class: 'n', text: String(r.nr) }), h('div', { class: 'd', text: 'Nr.' })]),
           h('div', { class: 'hist-main' }, [h('div', { class: 'v', text: main }), h('div', { class: 'm', text: meta })]),
@@ -779,15 +784,21 @@
     var head = h('div', { class: 'r-head' }, [
       h('strong', { text: 'Nr. ' + row.nr }), '  ·  ' + C.formatDate(row.date, 'short')
     ]);
-    if (!isBw) head.appendChild(document.createTextNode('  ·  ' + (row.weight !== null ? C.fmtNum(row.weight) + ' kg' : 'ohne Gewicht')));
+    if (!isBw && !row.other) head.appendChild(document.createTextNode('  ·  ' + (row.weight !== null ? C.fmtNum(row.weight) + ' kg' : 'ohne Gewicht')));
     el.appendChild(head);
+    if (row.other) {
+      el.appendChild(h('div', { class: 'r-note', text: row.est
+        ? 'Andere Maschine – Werte geschätzt als Mittelwert aus ' + row.est.map(function (d) { return C.formatDate(d, 'dm'); }).join(' und ') +
+          (row.weight !== null ? ' (≈ ' + C.fmtNum(row.weight) + ' kg)' : '')
+        : 'Andere Maschine – wird nach dem nächsten Training mit der gewohnten Maschine geschätzt.' }));
+    }
     var vals = h('div', { class: 'r-vals' });
     series.forEach(function (sr, i) {
-      var v = isBw ? row.ys[0] : row.sets[i];
+      var v = isBw ? row.ys[0] : row.other ? row.ys[i] : row.sets[i];
       if (v === null || v === undefined) return;
       vals.appendChild(h('span', {}, [
         series.length > 1 ? h('i', { class: 'lkey', style: 'background:' + sr.color }) : null,
-        h('b', { text: isBw ? C.fmtNum(v) + ' kg' : C.setLabel(v) }),
+        h('b', { text: isBw ? C.fmtNum(v) + ' kg' : (row.other ? '≈ ' : '') + C.setLabel(v) }),
         series.length > 1 ? sr.short : null
       ]));
     });
@@ -918,7 +929,7 @@
       var wy = plotB + 20;
       var prevW, lastLabelX = -1e9;
       rows.forEach(function (r) {
-        if (r.weight === prevW) return;
+        if (r.other || r.weight === prevW) return;
         prevW = r.weight;
         var x = X(r);
         svg.appendChild(s('line', { class: 'c-wtick', x1: x, x2: x, y1: plotB + 4, y2: plotB + 9 }));
@@ -940,7 +951,9 @@
         svg.appendChild(s('path', { class: 'c-line', d: d, style: 'stroke:' + sr.color }));
       }
       pts.forEach(function (r) {
-        svg.appendChild(s('circle', { class: 'c-dot', cx: X(r), cy: Y(r.ys[i]), r: pts.length > 40 ? 2.5 : 4, style: 'fill:' + sr.color }));
+        svg.appendChild(r.other
+          ? s('circle', { class: 'c-dot-est', cx: X(r), cy: Y(r.ys[i]), r: 4, style: 'stroke:' + sr.color })
+          : s('circle', { class: 'c-dot', cx: X(r), cy: Y(r.ys[i]), r: pts.length > 40 ? 2.5 : 4, style: 'fill:' + sr.color }));
       });
       var lp = pts[pts.length - 1];
       ends.push({ y: Y(lp.ys[i]), x: X(lp), label: sr.short, color: sr.color });
@@ -970,7 +983,9 @@
       marks.textContent = '';
       cfg.series.forEach(function (sr, k) {
         if (r.ys[k] === null || r.ys[k] === undefined) return;
-        marks.appendChild(s('circle', { class: 'c-dot', cx: x, cy: Y(r.ys[k]), r: 6, style: 'fill:' + sr.color }));
+        marks.appendChild(r.other
+          ? s('circle', { class: 'c-dot-est', cx: x, cy: Y(r.ys[k]), r: 6, style: 'stroke:' + sr.color })
+          : s('circle', { class: 'c-dot', cx: x, cy: Y(r.ys[k]), r: 6, style: 'fill:' + sr.color }));
       });
       cfg.onSelect(r);
     }
