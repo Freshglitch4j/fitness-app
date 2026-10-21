@@ -139,8 +139,10 @@ Hinweis: Android vibriert nur, solange die App im Vordergrund ist.
 
 ### Früheres Training bearbeiten oder nachtragen
 
-Über *Analyse* ein Training antippen, oder im Training oben rechts auf das
-Kalendersymbol tippen und ein Datum wählen. **heute** führt zurück.
+Im Bereich *Training* **wischen**: nach rechts zum vorherigen, nach links zum
+nächsten Training (bis heute). Oder über *Analyse* ein Training antippen, oder
+oben rechts auf das Kalendersymbol tippen und ein Datum wählen. **heute** führt
+zurück.
 Ganz unten kann ein Training gelöscht werden.
 
 ---

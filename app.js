@@ -6,7 +6,7 @@
   'use strict';
 
   var C = window.FitCore;
-  var APP_VERSION = '7';
+  var APP_VERSION = '8';
   var KEY = 'fitness.v1';
   var KEY_UNDO = 'fitness.undoImport';
 
@@ -367,6 +367,51 @@
   }
 
   $('trToday').addEventListener('click', function () { curDate = C.todayKey(); render(); });
+
+  // ---------------------------------------------------------------- Wischen
+  // Nach links wischen: nächstes (neueres) Training, nach rechts: vorheriges.
+  // Angesprungen werden alle Tage mit Training sowie heute.
+  function trainingStops() {
+    var stops = state.trainings.map(function (t) { return t.date; });
+    var today = C.todayKey();
+    if (stops.indexOf(today) < 0) stops.push(today);
+    if (stops.indexOf(curDate) < 0) stops.push(curDate);
+    return stops.sort();
+  }
+
+  function stepTraining(dir) {
+    var stops = trainingStops();
+    var i = stops.indexOf(curDate) + dir;
+    if (i < 0) { toast('Kein früheres Training'); return; }
+    if (i >= stops.length) { toast(curDate === C.todayKey() ? 'Das ist das heutige Training' : 'Kein späteres Training'); return; }
+    curDate = stops[i];
+    var v = $('view-train');
+    v.classList.remove('swipe-l', 'swipe-r');
+    void v.offsetWidth; // Animation neu starten
+    v.classList.add(dir > 0 ? 'swipe-l' : 'swipe-r');
+    renderTrain();
+    window.scrollTo(0, 0);
+  }
+
+  (function () {
+    var x0 = 0, y0 = 0, t0 = 0, active = false;
+    var view = $('view-train');
+    view.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1 || pad || dlg.open) { active = false; return; }
+      active = true;
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now();
+    }, { passive: true });
+    view.addEventListener('touchend', function (e) {
+      if (!active) return;
+      active = false;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+      // klare waagrechte Bewegung, nicht zu langsam (sonst war es Scrollen)
+      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - t0 > 700) return;
+      stepTraining(dx < 0 ? 1 : -1);
+    }, { passive: true });
+    view.addEventListener('animationend', function () { view.classList.remove('swipe-l', 'swipe-r'); });
+  })();
   $('trPick').addEventListener('click', function () {
     var d = $('trDate');
     if (d.showPicker) { try { d.showPicker(); return; } catch (e) { /* weiter unten */ } }

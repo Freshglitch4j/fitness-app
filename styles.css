@@ -108,6 +108,11 @@ body.has-timer .app { padding-bottom: calc(160px + env(safe-area-inset-bottom));
 
 .view { display: none; }
 .view.is-active { display: block; }
+#view-train { touch-action: pan-y; }
+.swipe-l { animation: swipeL 0.22s ease-out; }
+.swipe-r { animation: swipeR 0.22s ease-out; }
+@keyframes swipeL { from { transform: translateX(36px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+@keyframes swipeR { from { transform: translateX(-36px); opacity: 0.4; } to { transform: none; opacity: 1; } }
 
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
